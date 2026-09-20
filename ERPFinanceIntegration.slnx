@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ERP.Simulator/ERP.Simulator.csproj" />
+    <Project Path="src/Integration.Core/Integration.Core.csproj" />
+    <Project Path="src/Integration.Data/Integration.Data.csproj" />
+    <Project Path="src/Integration.Worker/Integration.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Integration.Tests/Integration.Tests.csproj" />
+  </Folder>
+</Solution>
