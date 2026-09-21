@@ -1,8 +1,10 @@
 # ERP ↔ Finance Integration Pipeline
 
+[![CI](https://github.com/mia724430/erp-finance-integration/actions/workflows/ci.yml/badge.svg)](https://github.com/mia724430/erp-finance-integration/actions/workflows/ci.yml)
+
 Simulates an automated data integration pipeline between an ERP system and a finance system (Xero format) — the kind of "glue" that keeps two enterprise systems in sync without manual CSV exports/imports.
 
-> **Status: Week 1, Day 6** — Full local pipeline, now with structured logging (Serilog, console + rolling file) and unified error handling: a bad file is logged and quarantined instead of crashing the Worker. CI/CD and demo polish land Day 7.
+> **Status: Week 1 complete** — Full local pipeline: generate → poll → parse → transform → dedupe → persist to MySQL → JSON output, with structured logging, unified error handling, and CI running build + test on every push. Week 2 (AWS) is next.
 
 ## Why this project
 
@@ -20,8 +22,8 @@ flowchart LR
     B -->|poll / event trigger| C[Integration Worker]
     C -->|transform ERP → Xero format| D[(MySQL)]
     C -->|output| E[JSON file back to S3]
-    F[GitHub Actions] -->|CI: build + test| F
-    F -->|CD: deploy| G[AWS Lambda / EC2]
+    F[Push to GitHub] --> G[GitHub Actions: build + test]
+    G -->|CD: deploy| H[AWS Lambda / EC2]
 ```
 
 *(Week 1 runs this locally — a folder on disk stands in for S3, and MySQL runs in Docker. AWS wiring lands in Week 2.)*
@@ -79,11 +81,22 @@ Each `ERP.Simulator` run generates a batch of 5–15 fake invoice/order records 
 
 Both `ERP.Simulator` and `Integration.Worker` log via Serilog to the console and to a rolling daily file under `logs/` at the repo root.
 
-**Error handling:** if a file fails anywhere in that pipeline (malformed CSV, DB error, etc.), the Worker logs the full exception and moves the file to `data/failed/` instead of `processed/` — the rest of the batch keeps processing, and the Worker keeps polling on the next cycle rather than crashing. There's no automatic retry (a known, documented limitation below); a failed file needs a human to look at it.
+**Error handling:** if a file fails anywhere in that pipeline (malformed CSV, DB error, a genuine data conflict — see below), the Worker logs the full exception and moves *that file* to `data/failed/` instead of `processed/`; any other files picked up in the same poll cycle are unaffected, and the Worker keeps polling on the next cycle rather than crashing. There's no automatic retry (a known, documented limitation below); a failed file needs a human to look at it.
+
+**Duplicate handling:** invoice numbers are checked at two levels before anything is saved. Within a single file, an exact repeated row is skipped (logged as a warning) and kept once; a row that shares an invoice number with an earlier row but has *different* content (amount, customer, date, or currency) is treated as a data error and fails the whole file, rather than silently picking one version. Across files — e.g. if a file gets reprocessed after a crash between the DB save and the file being marked done — invoices already saved to MySQL are detected and skipped as a no-op, backed by a unique index on `InvoiceNumber` as a database-level safety net.
+
+## Testing
+
+23 unit tests (`dotnet test`), all pure — no database or Docker required to run them:
+
+- **`ErpInvoiceTransformerTests`** — ERP→Xero field mapping and cleaning (whitespace, casing, currency, rounding).
+- **`ErpInvoiceGeneratorTests`** — the simulator produces one invoice per reserved order number, correctly.
+- **`InvoiceDeduplicatorTests`** — cross-file duplicate detection against already-saved invoices.
+- **`IntraFileDuplicateResolverTests`** — within-file exact duplicates vs. genuine conflicts.
 
 ## CI/CD
 
-Coming soon (Week 1, Day 7 for the initial build+test workflow; full deploy pipeline in Week 3).
+GitHub Actions (`.github/workflows/ci.yml`) runs `dotnet build` and `dotnet test` on every push and pull request to `main`. Full automated deploy to AWS lands in Week 3.
 
 ## Scope and honest limitations
 
@@ -96,6 +109,6 @@ This is a portfolio MVP, not a production integration:
 
 ## Roadmap
 
-- [ ] Week 1: local pipeline (simulator → worker → transform → MySQL/JSON), fully working end to end
+- [x] Week 1: local pipeline (simulator → worker → transform → MySQL/JSON), fully working end to end
 - [ ] Week 2: swap local folder for AWS S3, add EventBridge-triggered processing
 - [ ] Week 3: GitHub Actions CI/CD, automated deploy to AWS
