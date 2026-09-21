@@ -2,7 +2,7 @@
 
 Simulates an automated data integration pipeline between an ERP system and a finance system (Xero format) — the kind of "glue" that keeps two enterprise systems in sync without manual CSV exports/imports.
 
-> **Status: Week 1, Day 5** — Full local pipeline works end to end: ERP.Simulator generates CSVs, Integration.Worker polls/parses/transforms them, writes the results to MySQL (via EF Core migrations) and to JSON. Structured logging and polish land Day 6.
+> **Status: Week 1, Day 6** — Full local pipeline, now with structured logging (Serilog, console + rolling file) and unified error handling: a bad file is logged and quarantined instead of crashing the Worker. CI/CD and demo polish land Day 7.
 
 ## Why this project
 
@@ -77,7 +77,9 @@ Each `ERP.Simulator` run generates a batch of 5–15 fake invoice/order records 
 4. Writes the same batch out as a JSON file to `data/output/`.
 5. Moves the source CSV into `data/processed/` so it isn't picked up again.
 
-Structured logging (Serilog) and unified error handling land Day 6.
+Both `ERP.Simulator` and `Integration.Worker` log via Serilog to the console and to a rolling daily file under `logs/` at the repo root.
+
+**Error handling:** if a file fails anywhere in that pipeline (malformed CSV, DB error, etc.), the Worker logs the full exception and moves the file to `data/failed/` instead of `processed/` — the rest of the batch keeps processing, and the Worker keeps polling on the next cycle rather than crashing. There's no automatic retry (a known, documented limitation below); a failed file needs a human to look at it.
 
 ## CI/CD
 

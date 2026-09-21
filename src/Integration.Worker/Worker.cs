@@ -18,7 +18,15 @@ public class Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory) :
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            await ProcessIncomingFilesAsync(stoppingToken);
+            try
+            {
+                await ProcessIncomingFilesAsync(stoppingToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Unexpected error during poll cycle; will retry on the next cycle");
+            }
+
             await Task.Delay(PollInterval, stoppingToken);
         }
     }
@@ -29,25 +37,38 @@ public class Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory) :
 
         foreach (var filePath in files)
         {
-            var invoices = ReadInvoices(filePath);
             var fileName = Path.GetFileName(filePath);
 
-            logger.LogInformation("Parsed {Count} invoice(s) from {File}", invoices.Count, fileName);
-
-            var xeroInvoices = invoices.Select(ErpInvoiceTransformer.ToXeroInvoice).ToList();
-
-            foreach (var xeroInvoice in xeroInvoices)
+            try
             {
-                logger.LogInformation(
-                    "Transformed -> {InvoiceNumber} | {ContactName} | {Total} {CurrencyCode}",
-                    xeroInvoice.InvoiceNumber, xeroInvoice.ContactName, xeroInvoice.Total, xeroInvoice.CurrencyCode);
+                await ProcessFileAsync(filePath, fileName, cancellationToken);
             }
-
-            await SaveToDatabaseAsync(xeroInvoices, cancellationToken);
-            await WriteOutputJsonAsync(xeroInvoices, fileName, cancellationToken);
-
-            File.Move(filePath, Path.Combine(PipelineFolders.Processed, fileName), overwrite: true);
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to process {File}; moving to failed folder (no auto-retry)", fileName);
+                File.Move(filePath, Path.Combine(PipelineFolders.Failed, fileName), overwrite: true);
+            }
         }
+    }
+
+    private async Task ProcessFileAsync(string filePath, string fileName, CancellationToken cancellationToken)
+    {
+        var invoices = ReadInvoices(filePath);
+        logger.LogInformation("Parsed {Count} invoice(s) from {File}", invoices.Count, fileName);
+
+        var xeroInvoices = invoices.Select(ErpInvoiceTransformer.ToXeroInvoice).ToList();
+
+        foreach (var xeroInvoice in xeroInvoices)
+        {
+            logger.LogInformation(
+                "Transformed -> {InvoiceNumber} | {ContactName} | {Total} {CurrencyCode}",
+                xeroInvoice.InvoiceNumber, xeroInvoice.ContactName, xeroInvoice.Total, xeroInvoice.CurrencyCode);
+        }
+
+        await SaveToDatabaseAsync(xeroInvoices, cancellationToken);
+        await WriteOutputJsonAsync(xeroInvoices, fileName, cancellationToken);
+
+        File.Move(filePath, Path.Combine(PipelineFolders.Processed, fileName), overwrite: true);
     }
 
     private async Task SaveToDatabaseAsync(List<XeroInvoice> xeroInvoices, CancellationToken cancellationToken)

@@ -15,9 +15,15 @@ public static class PipelineFolders
 
     public static string Output => GetOrCreate("output");
 
-    private static string GetOrCreate(string subfolder)
+    public static string Failed => GetOrCreate("failed");
+
+    public static string Logs => GetOrCreateAt(SolutionRoot, "logs");
+
+    private static string GetOrCreate(string subfolder) => GetOrCreateAt(Path.Combine(SolutionRoot, "data"), subfolder);
+
+    private static string GetOrCreateAt(string parent, string subfolder)
     {
-        var path = Path.Combine(SolutionRoot, "data", subfolder);
+        var path = Path.Combine(parent, subfolder);
         Directory.CreateDirectory(path);
         return path;
     }
