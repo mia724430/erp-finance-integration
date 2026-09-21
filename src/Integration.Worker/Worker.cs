@@ -69,15 +69,24 @@ public class Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory) :
 
         var xeroInvoices = invoices.Select(ErpInvoiceTransformer.ToXeroInvoice).ToList();
 
-        foreach (var xeroInvoice in xeroInvoices)
+        var (kept, skippedDuplicates) = IntraFileDuplicateResolver.Resolve(xeroInvoices);
+
+        foreach (var duplicate in skippedDuplicates)
+        {
+            logger.LogWarning(
+                "Skipping duplicate row for invoice {InvoiceNumber} within {File} (identical to an earlier row in the same file)",
+                duplicate.InvoiceNumber, fileName);
+        }
+
+        foreach (var xeroInvoice in kept)
         {
             logger.LogInformation(
                 "Transformed -> {InvoiceNumber} | {ContactName} | {Total} {CurrencyCode}",
                 xeroInvoice.InvoiceNumber, xeroInvoice.ContactName, xeroInvoice.Total, xeroInvoice.CurrencyCode);
         }
 
-        await SaveToDatabaseAsync(xeroInvoices, cancellationToken);
-        await WriteOutputJsonAsync(xeroInvoices, fileName, cancellationToken);
+        await SaveToDatabaseAsync(kept, cancellationToken);
+        await WriteOutputJsonAsync(kept, fileName, cancellationToken);
 
         File.Move(filePath, Path.Combine(PipelineFolders.Processed, fileName), overwrite: true);
     }
