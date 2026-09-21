@@ -2,7 +2,7 @@
 
 Simulates an automated data integration pipeline between an ERP system and a finance system (Xero format) — the kind of "glue" that keeps two enterprise systems in sync without manual CSV exports/imports.
 
-> **Status: Week 1, Day 1** — project scaffolding in progress. Not runnable yet.
+> **Status: Week 1, Day 2** — ERP.Simulator generates fake invoice/order CSVs. Worker/transform/database steps not built yet.
 
 ## Why this project
 
@@ -57,7 +57,15 @@ erp-finance-integration/
 
 ## Running locally
 
-Coming soon — once the worker, transformation logic, and local database are wired up (Week 1, Days 3–6).
+So far, only the ERP side is wired up:
+
+```bash
+dotnet run --project src/ERP.Simulator
+```
+
+Each run generates a batch of 5–15 fake invoice/order records and writes them as a CSV to `data/incoming/` at the repo root (a stand-in for the S3 bucket during Week 1; the folder is gitignored and created automatically). The records include a bit of realistic messiness — stray whitespace, inconsistent currency casing — for the Day 4 transform step to clean up.
+
+The rest of the pipeline (worker, transformation, database) lands Week 1, Days 3–6.
 
 ## CI/CD
 

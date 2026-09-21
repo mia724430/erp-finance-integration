@@ -3,6 +3,9 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+# Local stand-in for S3 (Week 1) — generated ERP export files, not committed
+/data/
+
 # dotenv files
 .env
 
