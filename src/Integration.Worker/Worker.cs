@@ -3,6 +3,7 @@ using CsvHelper;
 using Integration.Core;
 using Integration.Core.Csv;
 using Integration.Core.Models;
+using Integration.Core.Transform;
 
 namespace Integration.Worker;
 
@@ -29,6 +30,14 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             var fileName = Path.GetFileName(filePath);
 
             logger.LogInformation("Parsed {Count} invoice(s) from {File}", invoices.Count, fileName);
+
+            foreach (var invoice in invoices)
+            {
+                var xeroInvoice = ErpInvoiceTransformer.ToXeroInvoice(invoice);
+                logger.LogInformation(
+                    "Transformed {OrderId} -> {InvoiceNumber} | {ContactName} | {Total} {CurrencyCode}",
+                    invoice.OrderId, xeroInvoice.InvoiceNumber, xeroInvoice.ContactName, xeroInvoice.Total, xeroInvoice.CurrencyCode);
+            }
 
             File.Move(filePath, Path.Combine(PipelineFolders.Processed, fileName), overwrite: true);
         }
