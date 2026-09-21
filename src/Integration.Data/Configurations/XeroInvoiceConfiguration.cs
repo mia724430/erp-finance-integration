@@ -23,5 +23,10 @@ public class XeroInvoiceConfiguration : IEntityTypeConfiguration<XeroInvoice>
         builder.Property(x => x.ContactName).HasMaxLength(200).IsRequired();
         builder.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
         builder.Property(x => x.Total).HasColumnType("decimal(18,2)");
+
+        // Backstop, not the primary defense: Worker.cs checks for existing invoice
+        // numbers before inserting (see InvoiceDeduplicator), so this should only
+        // ever fire if that check races with another writer.
+        builder.HasIndex(x => x.InvoiceNumber).IsUnique();
     }
 }

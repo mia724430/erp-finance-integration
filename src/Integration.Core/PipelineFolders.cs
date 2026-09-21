@@ -17,6 +17,8 @@ public static class PipelineFolders
 
     public static string Failed => GetOrCreate("failed");
 
+    public static string State => GetOrCreate("state");
+
     public static string Logs => GetOrCreateAt(SolutionRoot, "logs");
 
     private static string GetOrCreate(string subfolder) => GetOrCreateAt(Path.Combine(SolutionRoot, "data"), subfolder);

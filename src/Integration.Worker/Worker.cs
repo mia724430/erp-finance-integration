@@ -6,6 +6,7 @@ using Integration.Core.Csv;
 using Integration.Core.Models;
 using Integration.Core.Transform;
 using Integration.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace Integration.Worker;
 
@@ -46,7 +47,17 @@ public class Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory) :
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to process {File}; moving to failed folder (no auto-retry)", fileName);
-                File.Move(filePath, Path.Combine(PipelineFolders.Failed, fileName), overwrite: true);
+
+                try
+                {
+                    File.Move(filePath, Path.Combine(PipelineFolders.Failed, fileName), overwrite: true);
+                }
+                catch (Exception moveEx)
+                {
+                    logger.LogError(moveEx,
+                        "Failed to move {File} to the failed folder; it will remain in incoming and be retried next cycle",
+                        fileName);
+                }
             }
         }
     }
@@ -76,10 +87,30 @@ public class Worker(ILogger<Worker> logger, IServiceScopeFactory scopeFactory) :
         using var scope = scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<IntegrationDbContext>();
 
-        dbContext.Invoices.AddRange(xeroInvoices);
-        await dbContext.SaveChangesAsync(cancellationToken);
+        var invoiceNumbers = xeroInvoices.Select(x => x.InvoiceNumber).ToList();
+        var existingInvoiceNumbers = await dbContext.Invoices
+            .Where(x => invoiceNumbers.Contains(x.InvoiceNumber))
+            .Select(x => x.InvoiceNumber)
+            .ToHashSetAsync(cancellationToken);
 
-        logger.LogInformation("Saved {Count} invoice(s) to MySQL", xeroInvoices.Count);
+        var (newInvoices, duplicates) = InvoiceDeduplicator.Partition(xeroInvoices, existingInvoiceNumbers);
+
+        foreach (var duplicate in duplicates)
+        {
+            logger.LogWarning(
+                "Skipping duplicate invoice {InvoiceNumber} (already saved to MySQL) -- likely a reprocessed file",
+                duplicate.InvoiceNumber);
+        }
+
+        if (newInvoices.Count > 0)
+        {
+            dbContext.Invoices.AddRange(newInvoices);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        logger.LogInformation(
+            "Saved {Count} invoice(s) to MySQL ({DuplicateCount} duplicate(s) skipped)",
+            newInvoices.Count, duplicates.Count);
     }
 
     private static async Task WriteOutputJsonAsync(List<XeroInvoice> xeroInvoices, string sourceFileName, CancellationToken cancellationToken)

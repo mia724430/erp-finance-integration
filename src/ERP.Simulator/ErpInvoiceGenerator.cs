@@ -18,15 +18,15 @@ public static class ErpInvoiceGenerator
 
     private static readonly string[] CurrencyCodes = ["NZD", "NZD", "NZD", "AUD", "nzd"];
 
-    public static List<ErpInvoice> Generate(int count, Random random)
+    public static List<ErpInvoice> Generate(IReadOnlyList<int> orderNumbers, Random random)
     {
-        var invoices = new List<ErpInvoice>(count);
+        var invoices = new List<ErpInvoice>(orderNumbers.Count);
 
-        for (var i = 0; i < count; i++)
+        foreach (var orderNumber in orderNumbers)
         {
             invoices.Add(new ErpInvoice
             {
-                OrderId = $"ORD-{random.Next(10000, 99999)}",
+                OrderId = $"ORD-{orderNumber}",
                 CustomerName = CustomerNames[random.Next(CustomerNames.Length)],
                 Amount = Math.Round((decimal)(random.NextDouble() * 4950 + 50), 2),
                 OrderDate = DateTime.Today.AddDays(-random.Next(0, 14)),

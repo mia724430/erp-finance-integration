@@ -15,7 +15,8 @@ using var log = new LoggerConfiguration()
 
 var random = new Random();
 var batchSize = random.Next(5, 16);
-var invoices = ErpInvoiceGenerator.Generate(batchSize, random);
+var orderNumbers = OrderSequence.Reserve(batchSize);
+var invoices = ErpInvoiceGenerator.Generate(orderNumbers, random);
 
 var fileName = $"erp-export-{DateTime.Now:yyyyMMdd-HHmmss}.csv";
 var filePath = Path.Combine(PipelineFolders.Incoming, fileName);
