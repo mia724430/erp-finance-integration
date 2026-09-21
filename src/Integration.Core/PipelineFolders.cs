@@ -13,6 +13,8 @@ public static class PipelineFolders
 
     public static string Processed => GetOrCreate("processed");
 
+    public static string Output => GetOrCreate("output");
+
     private static string GetOrCreate(string subfolder)
     {
         var path = Path.Combine(SolutionRoot, "data", subfolder);

@@ -1,0 +1,15 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: devpassword
+      MYSQL_DATABASE: erp_finance_integration
+    ports:
+      # Host port 3307 (not 3306) — this machine already runs a native MySQL
+      # server on 3306, so this container uses a different port to avoid clashing.
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+volumes:
+  mysql-data:
